@@ -1,221 +1,329 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Purchasing Order Scanner</title>
-<script src="https://unpkg.com/html5-qrcode"></script>
-<style>
-body {
-  font-family: Arial, sans-serif;
-  background: #f1f5f9;
-  margin: 0;
-  padding: 15px;
-}
-.container {
-  max-width: 600px;
-  margin: 15px auto;
-  background: white;
-  padding: 20px;
-  border-radius: 18px;
-  box-shadow: 0 3px 15px #0001;
-}
-h2 {text-align:center;color:#17365d}
-button {
-  width:100%;
-  padding:15px;
-  margin:8px 0;
-  border:0;
-  border-radius:10px;
-  background:#1769aa;
-  color:white;
-  font-size:16px;
-}
-input {
-  width:100%;
-  box-sizing:border-box;
-  padding:15px;
-  border:1px solid #ccc;
-  border-radius:9px;
-  font-size:18px;
-}
-#reader {margin:15px 0}
-#status {
-  padding:13px;
-  background:#f1f5f9;
-  border-radius:9px;
-  margin-top:12px;
-}
-.result-card {
-  border:1px solid #ddd;
-  border-radius:10px;
-  margin-top:15px;
-  overflow:hidden;
-}
-.result-card h3 {
-  background:#17365d;
-  color:white;
-  padding:14px;
-  margin:0;
-}
-.result-row {
-  display:flex;
-  justify-content:space-between;
-  gap:12px;
-  padding:12px;
-  border-bottom:1px solid #eee;
-}
-.result-row strong {flex:1;color:#555}
-.result-row span {
-  flex:1;
-  text-align:right;
-  overflow-wrap:anywhere;
-}
-</style>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Purchasing Tracker Dashboard</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    :root { --navy:#17365d; --blue:#1769aa; --bg:#f1f5f9; --green:#188038; }
+    * { box-sizing:border-box; }
+    body { font-family:Arial,sans-serif; background:var(--bg); margin:0; padding:14px; color:#172033; }
+    .container { max-width:760px; margin:12px auto; background:#fff; padding:18px; border-radius:18px; box-shadow:0 3px 15px #0001; }
+    h1,h2 { color:var(--navy); text-align:center; margin-top:6px; }
+    .sub { text-align:center; color:#64748b; margin-bottom:20px; }
+    button { border:0; border-radius:10px; padding:14px 16px; font-size:16px; font-weight:600; cursor:pointer; }
+    .primary { background:var(--blue); color:white; width:100%; margin:7px 0; }
+    .green { background:var(--green); color:white; width:100%; margin:7px 0; }
+    .muted { background:#e2e8f0; color:#1e293b; width:100%; margin:7px 0; }
+    .nav { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .nav button { min-height:78px; background:#eff6ff; color:var(--navy); border:1px solid #dbeafe; }
+    .section { display:none; margin-top:18px; border-top:1px solid #e2e8f0; padding-top:16px; }
+    .section.active { display:block; }
+    label { display:block; font-weight:600; margin:12px 0 5px; color:#334155; }
+    input,select,textarea { width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:9px; font-size:16px; background:white; }
+    textarea { min-height:76px; resize:vertical; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .required { color:#dc2626; }
+    .hint { color:#64748b; font-size:13px; }
+    #status { padding:12px; border-radius:9px; background:#f1f5f9; margin:12px 0; white-space:pre-wrap; }
+    .card { border:1px solid #dbe2ea; border-radius:12px; overflow:hidden; margin-top:12px; }
+    .card h3 { background:var(--navy); color:white; margin:0; padding:13px; }
+    .result-row { display:flex; gap:12px; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #edf0f3; }
+    .result-row strong { flex:1; color:#475569; }
+    .result-row span { flex:1; text-align:right; overflow-wrap:anywhere; }
+    .preview-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .checkline { display:flex; align-items:center; gap:9px; margin:14px 0; }
+    .checkline input { width:20px; height:20px; }
+    @media(max-width:520px) { .grid,.nav { grid-template-columns:1fr; } .container { padding:14px; } }
+  </style>
 </head>
 <body>
-
 <div class="container">
-<h2>📦 Order Barcode Scanner</h2>
-<p style="text-align:center">
-Online Shopping Purchasing Tracker
-</p>
+  <h1>📦 Purchasing Tracker</h1>
+  <div class="sub">Online Shopping Purchasing Dashboard</div>
 
-<button onclick="startScanner()">
-📷 OPEN CAMERA SCANNER
-</button>
+  <div class="nav">
+    <button onclick="showSection('newOrder')">➕ NEW ORDER</button>
+    <button onclick="showSection('search')">🔎 ORDER SEARCH</button>
+    <button onclick="showSection('scanner')">📷 SCAN BARCODE</button>
+    <button onclick="openSheet()">📊 OPEN GOOGLE SHEET</button>
+  </div>
 
-<div id="reader"></div>
+  <div id="status" role="status">Ready.</div>
 
-<h3>Scanned Barcode</h3>
-<input id="barcode" placeholder="Scan or enter Barcode">
+  <section id="newOrder" class="section">
+    <h2>New Order</h2>
+    <form id="orderForm" onsubmit="event.preventDefault(); buildPreview();">
+      <label>Order ID <span class="required">*</span></label>
+      <input name="orderId" required placeholder="Enter Order ID / Barcode">
 
-<button onclick="searchOrder()">🔍 SEARCH ORDER</button>
+      <div class="grid">
+        <div><label>Order Date <span class="required">*</span></label><input name="orderDate" type="date" required></div>
+        <div><label>Arrival Date</label><input name="arrivalDate" type="date"></div>
+      </div>
 
-<div id="status">Waiting for barcode...</div>
-<div id="results"></div>
+      <label>Store / Platform</label>
+      <select name="platform">
+        <option value="">Select platform</option>
+        <option>Lazada</option><option>Shopee</option><option>SHINE</option><option>BigC</option>
+        <option>Lotus</option><option>Makro</option><option>Watsons TH</option><option>7-Eleven</option><option>Lalamove</option><option>Other</option>
+      </select>
+
+      <label>Category</label>
+      <select name="category">
+        <option value="">Select category</option>
+        <option>Electronics</option><option>Apparel</option><option>Home &amp; Kitchen</option>
+        <option>Office</option><option>Health &amp; Personal Care</option><option>Books &amp; Media</option><option>Other</option>
+      </select>
+
+      <label>Item <span class="required">*</span></label>
+      <input name="item" required placeholder="Product name">
+
+      <div class="grid">
+        <div><label>Qty <span class="required">*</span></label><input name="qty" type="number" min="1" step="1" required></div>
+        <div><label>Total Cost (฿) <span class="required">*</span></label><input name="totalCost" type="number" min="0" step="0.01" required></div>
+      </div>
+
+      <label>Other Amount (฿) <span class="required">*</span></label>
+      <input name="otherAmount" type="number" min="0" step="0.01" value="0" required>
+      <p class="hint">4% Rebate, Delivery Status နှင့် % of Amount ကို Sheet ရှိ Formula များကတွက်ချက်ပါမည်။</p>
+
+      <div class="grid">
+        <div><label>Cargo Date</label><input name="cargoDate" type="date"></div>
+        <div><label>Cargo Status</label><select name="cargoStatus"><option value="">Select</option><option>Delivered</option><option>Failed</option><option>Pending</option></select></div>
+        <div><label>Claim Date</label><input name="claimDate" type="date"></div>
+        <div><label>% of Platform</label><input name="platformPercent" type="text" placeholder="e.g. 1%"></div>
+      </div>
+
+      <label class="checkline"><input name="claimStatus" type="checkbox"> Claim Status (checked = claimed)</label>
+      <label>Tracking / Notes</label>
+      <textarea name="notes" placeholder="Tracking number or notes"></textarea>
+      <button class="primary" type="submit">👁️ PREVIEW ORDER</button>
+    </form>
+    <div id="preview"></div>
+  </section>
+
+  <section id="search" class="section">
+    <h2>Order Search</h2>
+    <label>Order ID</label>
+    <input id="searchId" placeholder="Enter Order ID">
+    <button class="primary" onclick="searchOrder()">🔍 SEARCH ORDER</button>
+    <div id="searchResults"></div>
+  </section>
+
+  <section id="scanner" class="section">
+    <h2>Barcode Scanner</h2>
+    <button class="primary" onclick="startScanner()">📷 OPEN CAMERA</button>
+    <div id="reader"></div>
+    <label>Scanned Barcode / Order ID</label>
+    <input id="scanId" placeholder="Scan or enter Order ID">
+    <button class="primary" onclick="searchScanned()">SEARCH SCANNED ORDER</button>
+    <div id="scanResults"></div>
+  </section>
 </div>
 
 <script>
-const API_URL =
-"https://script.google.com/macros/s/AKfycbx67rp0AzXNjsZdDbOSDz2kWa091ESFwXH8VsSjc34cDpM5xjkRlkht3jo2E2EA7YWs/exec";
+  let pendingOrder = null;
+  let editOriginalId = null;
+  let scanner = null;
+  let latestSheetUrl = "";
 
-let scanner = null;
-let requestTimer = null;
-
-function startScanner() {
-  if (scanner) return;
-
-  scanner = new Html5Qrcode("reader");
-
-  scanner.start(
-    {facingMode:"environment"},
-    {fps:10,qrbox:{width:250,height:120}},
-    async (text) => {
-      document.getElementById("barcode").value = text;
-      await scanner.stop();
-      scanner = null;
-      searchOrder();
-    },
-    () => {}
-  ).catch(err => {
-    scanner = null;
-    setStatus("Camera error: " + err);
-  });
-}
-
-function setStatus(message) {
-  document.getElementById("status").textContent = message;
-}
-
-function searchOrder() {
-  const barcode = document.getElementById("barcode").value.trim();
-
-  if (!barcode) {
-    setStatus("Please enter or scan a barcode.");
-    return;
+  function setStatus(message) {
+    document.getElementById("status").textContent = message;
   }
 
-  document.getElementById("results").replaceChildren();
-  setStatus("Searching Google Sheets...");
+  function showSection(id) {
+    document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+    setStatus("Ready.");
+    if (id !== "scanner") stopScanner();
+  }
 
-  if (requestTimer) clearTimeout(requestTimer);
+  function openSheet() {
+    // The spreadsheet URL is returned by the server after saving/searching.
+    if (latestSheetUrl) window.open(latestSheetUrl, "_blank");
+    else setStatus("Save or search an order first to get the Sheet link.");
+  }
 
-  const old = document.getElementById("api-script");
-  if (old) old.remove();
+  function formObject(form) {
+    const fd = new FormData(form);
+    const obj = {};
+    for (const [key, value] of fd.entries()) obj[key] = value;
+    obj.claimStatus = form.elements.claimStatus.checked;
+    return obj;
+  }
 
-  window.orderSearchCallback = function(data) {
-    clearTimeout(requestTimer);
+  function buildPreview() {
+    const form = document.getElementById("orderForm");
+    if (!form.reportValidity()) return;
+    pendingOrder = formObject(form);
+    const labels = {
+      orderId:"Order ID", orderDate:"Order Date", arrivalDate:"Arrival Date",
+      platform:"Store / Platform", category:"Category", item:"Item", qty:"Qty",
+      totalCost:"Total Cost (฿)", otherAmount:"Other Amount (฿)", cargoDate:"Cargo Date",
+      cargoStatus:"Cargo Status", claimDate:"Claim Date", claimStatus:"Claim Status",
+      platformPercent:"% of Platform", notes:"Tracking / Notes"
+    };
+    const preview = document.getElementById("preview");
+    preview.replaceChildren();
+    const card = document.createElement("div"); card.className = "card";
+    const h = document.createElement("h3"); h.textContent = "Please review before saving"; card.appendChild(h);
+    Object.keys(labels).forEach(key => {
+      const row = document.createElement("div"); row.className = "result-row";
+      const strong = document.createElement("strong"); strong.textContent = labels[key];
+      const span = document.createElement("span");
+      span.textContent = key === "claimStatus" ? (pendingOrder[key] ? "Yes" : "No") : (pendingOrder[key] || "-");
+      row.append(strong, span); card.appendChild(row);
+    });
+    preview.appendChild(card);
+    const actions = document.createElement("div"); actions.className = "preview-actions";
+    const back = document.createElement("button"); back.className = "muted"; back.textContent = "EDIT"; back.onclick = () => { preview.replaceChildren(); };
+    const confirm = document.createElement("button"); confirm.className = "green";
+    confirm.textContent = editOriginalId ? "CONFIRM & UPDATE" : "CONFIRM & SAVE";
+    confirm.onclick = editOriginalId ? updatePendingOrder : savePendingOrder;
+    actions.append(back, confirm); preview.appendChild(actions);
+    setStatus("Preview ready. Confirm to save this order.");
+  }
 
-    if (!data.success) {
-      setStatus(data.message || "Order not found.");
-      return;
-    }
+  function savePendingOrder() {
+    if (!pendingOrder) return;
+    setStatus("Saving order...");
+    google.script.run
+      .withSuccessHandler(result => {
+        latestSheetUrl = result.sheetUrl;
+        setStatus("✅ " + result.message + " Order ID: " + result.orderId + " | Row: " + result.row);
+        document.getElementById("preview").replaceChildren();
+        document.getElementById("orderForm").reset();
+        pendingOrder = null;
+        editOriginalId = null;
+        const link = document.createElement("button"); link.className = "green"; link.textContent = "OPEN SAVED ROW IN GOOGLE SHEETS";
+        link.onclick = () => window.open(result.sheetUrl, "_blank");
+        document.getElementById("preview").appendChild(link);
+      })
+      .withFailureHandler(err => setStatus("❌ " + (err && err.message ? err.message : err)))
+      .saveOrder(pendingOrder);
+  }
 
-    setStatus("Order found - Row " + data.row);
-    showResults(data);
-    
-  };
+  function updatePendingOrder() {
+    if (!pendingOrder || !editOriginalId) return;
+    setStatus("Updating order...");
+    google.script.run
+      .withSuccessHandler(result => {
+        latestSheetUrl = result.sheetUrl;
+        setStatus("✅ " + result.message + " Order ID: " + result.orderId + " | Row: " + result.row);
+        document.getElementById("preview").replaceChildren();
+        pendingOrder = null;
+        editOriginalId = null;
+        searchOrder();
+      })
+      .withFailureHandler(err => setStatus("❌ " + (err && err.message ? err.message : err)))
+      .updateOrder(editOriginalId, pendingOrder);
+  }
 
-  const script = document.createElement("script");
-  script.id = "api-script";
+  function searchOrder() {
+    const id = document.getElementById("searchId").value.trim();
+    if (!id) { setStatus("Enter an Order ID."); return; }
+    setStatus("Searching...");
+    google.script.run
+      .withSuccessHandler(result => renderOrder(result, "searchResults"))
+      .withFailureHandler(err => setStatus("Search error: " + err.message))
+      .searchOrder(id);
+  }
 
-  script.onerror = function() {
-    clearTimeout(requestTimer);
-    setStatus("Connection failed. Check Google login and Web App access.");
-  };
+  function searchScanned() {
+    const id = document.getElementById("scanId").value.trim();
+    if (!id) { setStatus("Scan or enter an Order ID."); return; }
+    setStatus("Searching scanned Order ID...");
+    google.script.run
+      .withSuccessHandler(result => renderOrder(result, "scanResults"))
+      .withFailureHandler(err => setStatus("Search error: " + err.message))
+      .searchOrder(id);
+  }
 
-  script.src = API_URL +
-    "?barcode=" + encodeURIComponent(barcode) +
-    "&callback=orderSearchCallback&_=" + Date.now();
+  function renderOrder(result, targetId) {
+    const target = document.getElementById(targetId); target.replaceChildren();
+    if (!result.success) { setStatus(result.message || "Order not found."); return; }
+    latestSheetUrl = result.rowUrl;
+    setStatus("✅ Order found — Row " + result.row);
+    const card = document.createElement("div"); card.className = "card";
+    const h = document.createElement("h3"); h.textContent = "ORDER DETAILS — ROW " + result.row; card.appendChild(h);
+    result.data.forEach(item => {
+      const row = document.createElement("div"); row.className = "result-row";
+      const strong = document.createElement("strong"); strong.textContent = item.label;
+      const span = document.createElement("span"); span.textContent = item.value;
+      row.append(strong, span); card.appendChild(row);
+    });
+    target.appendChild(card);
+    const go = document.createElement("button"); go.className = "green"; go.textContent = "📊 GO TO ROW " + result.row;
+    go.onclick = () => window.open(result.rowUrl, "_blank");
+    target.appendChild(go);
 
-  document.body.appendChild(script);
+    const edit = document.createElement("button");
+    edit.className = "primary";
+    edit.textContent = "✏️ EDIT ORDER";
+    edit.onclick = () => loadOrderForEdit(result);
+    target.appendChild(edit);
+  }
 
-  requestTimer = setTimeout(() => {
-    setStatus("Request timed out. Check Web App permission.");
-    script.remove();
-  }, 20000);
-}
+  function loadOrderForEdit(result) {
+    const keys = ["orderId","orderDate","arrivalDate","platform","category","item","qty","totalCost",
+                  "otherAmount","cargoDate","cargoStatus","claimDate","claimStatus","platformPercent","notes"];
+    const form = document.getElementById("orderForm");
+    const vals = {};
+    result.data.forEach(item => vals[item.label.trim().toLowerCase()] = item.value === "-" ? "" : item.value);
+    // Use the sheet header labels to map values reliably by their displayed names.
+    const headerMap = {};
+    result.data.forEach(item => headerMap[item.label.trim().toLowerCase()] = item.value === "-" ? "" : item.value);
+    const candidates = {
+      orderId:["order id"], orderDate:["order date"], arrivalDate:["arrives date","arrival date"],
+      platform:["store/ platform","store / platform","store/platform","platform"],
+      category:["category"], item:["item"], qty:["qty"], totalCost:["total coast","total cost"],
+      otherAmount:["other amount"], cargoDate:["cargo date"], cargoStatus:["cargo status"],
+      claimDate:["claim date"], claimStatus:["claim status"], platformPercent:["% of platform"],
+      notes:["tracking / noted","tracking / notes","tracking / noted "]
+    };
+    const dateKeys = new Set(["orderDate","arrivalDate","cargoDate","claimDate"]);
+    keys.forEach(key => {
+      const match = candidates[key].find(name => Object.prototype.hasOwnProperty.call(headerMap, name));
+      let value = match ? headerMap[match] : "";
+      if (dateKeys.has(key) && value) {
+        const d = new Date(value);
+        if (!isNaN(d)) value = [d.getFullYear(), String(d.getMonth()+1).padStart(2,"0"), String(d.getDate()).padStart(2,"0")].join("-");
+      }
+      if (key === "claimStatus") {
+        form.elements[key].checked = /true|yes|claimed|checked/i.test(String(value));
+      } else if (form.elements[key]) {
+        form.elements[key].value = value;
+      }
+    });
+    editOriginalId = vals["order id"] || result.data[0].value;
+    document.getElementById("preview").replaceChildren();
+    showSection("newOrder");
+    setStatus("Editing Order ID: " + editOriginalId + ". Review changes, then Preview and Confirm Update.");
+  }
 
-function showResults(data) {
-  const container = document.getElementById("results");
-  container.replaceChildren();
+  function startScanner() {
+    if (scanner) return;
+    if (typeof Html5Qrcode === "undefined") { setStatus("Scanner library did not load."); return; }
+    scanner = new Html5Qrcode("reader");
+    scanner.start({ facingMode:"environment" }, { fps:10, qrbox:{ width:250, height:130 } },
+      async text => {
+        document.getElementById("scanId").value = text;
+        await stopScanner();
+        searchScanned();
+      },
+      () => {}
+    ).catch(err => { scanner = null; setStatus("Camera could not start: " + err); });
+  }
 
-  const card = document.createElement("div");
-  card.className = "result-card";
-
-  const heading = document.createElement("h3");
-  heading.textContent = "📦 ORDER DETAILS";
-  card.appendChild(heading);
-
-  data.data.forEach(item => {
-    const row = document.createElement("div");
-    row.className = "result-row";
-
-    const label = document.createElement("strong");
-    label.textContent = item.label;
-
-    const value = document.createElement("span");
-    value.textContent = item.value;
-
-    row.append(label, value);
-    card.appendChild(row);
-  });
-
-  container.appendChild(card);
-  const goButton = document.createElement("button");
-  goButton.textContent = "📊 GO TO ROW " + data.row;
-
-  goButton.style.background = "#188038";
-
-  goButton.onclick = function() {
-    if (data.rowUrl) {
-      window.open(data.rowUrl, "_blank");
-    }
-  };
-
-  container.appendChild(goButton);
-}
+  async function stopScanner() {
+    if (!scanner) return;
+    try { await scanner.stop(); } catch(e) {}
+    try { scanner.clear(); } catch(e) {}
+    scanner = null;
+  }
 </script>
 </body>
 </html>
