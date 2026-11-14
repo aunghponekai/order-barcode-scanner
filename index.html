@@ -3,57 +3,79 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Order Barcode Scanner</title>
+<title>Purchasing Order Scanner</title>
 <script src="https://unpkg.com/html5-qrcode"></script>
 <style>
 body {
   font-family: Arial, sans-serif;
   background: #f1f5f9;
   margin: 0;
-  padding: 20px;
+  padding: 15px;
 }
 .container {
-  max-width: 520px;
-  margin: auto;
+  max-width: 600px;
+  margin: 15px auto;
   background: white;
-  padding: 22px;
+  padding: 20px;
   border-radius: 18px;
   box-shadow: 0 3px 15px #0001;
 }
-h2 { text-align: center; color: #17365d; }
+h2 {text-align:center;color:#17365d}
 button {
-  width: 100%;
-  padding: 15px;
-  margin-top: 12px;
-  border: none;
-  border-radius: 10px;
-  background: #1769aa;
-  color: white;
-  font-size: 16px;
+  width:100%;
+  padding:15px;
+  margin:8px 0;
+  border:0;
+  border-radius:10px;
+  background:#1769aa;
+  color:white;
+  font-size:16px;
 }
 input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 14px;
-  border: 1px solid #ccc;
-  border-radius: 9px;
-  font-size: 17px;
-  margin-top: 10px;
+  width:100%;
+  box-sizing:border-box;
+  padding:15px;
+  border:1px solid #ccc;
+  border-radius:9px;
+  font-size:18px;
 }
-#reader { margin-top: 18px; }
-.result {
-  background: #eaf3ff;
-  padding: 15px;
-  margin-top: 15px;
-  border-radius: 10px;
-  overflow-wrap: anywhere;
+#reader {margin:15px 0}
+#status {
+  padding:13px;
+  background:#f1f5f9;
+  border-radius:9px;
+  margin-top:12px;
+}
+.result-card {
+  border:1px solid #ddd;
+  border-radius:10px;
+  margin-top:15px;
+  overflow:hidden;
+}
+.result-card h3 {
+  background:#17365d;
+  color:white;
+  padding:14px;
+  margin:0;
+}
+.result-row {
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px;
+  border-bottom:1px solid #eee;
+}
+.result-row strong {flex:1;color:#555}
+.result-row span {
+  flex:1;
+  text-align:right;
+  overflow-wrap:anywhere;
 }
 </style>
 </head>
-
 <body>
-<div class="container">
 
+<div class="container">
 <h2>📦 Order Barcode Scanner</h2>
 <p style="text-align:center">
 Online Shopping Purchasing Tracker
@@ -66,22 +88,20 @@ Online Shopping Purchasing Tracker
 <div id="reader"></div>
 
 <h3>Scanned Barcode</h3>
+<input id="barcode" placeholder="Scan or enter Barcode">
 
-<input id="barcode"
-placeholder="Scan or enter Order ID">
+<button onclick="searchOrder()">🔍 SEARCH ORDER</button>
 
-<button onclick="searchOrder()">
-🔍 SEARCH ORDER
-</button>
-
-<div id="result" class="result">
-Waiting for barcode...
-</div>
-
+<div id="status">Waiting for barcode...</div>
+<div id="results"></div>
 </div>
 
 <script>
+const API_URL =
+"https://script.google.com/macros/s/AKfycbx67rp0AzXNjsZdDbOSDz2kWa091ESFwXH8VsSjc34cDpM5xjkRlkht3jo2E2EA7YWs/exec";
+
 let scanner = null;
+let requestTimer = null;
 
 function startScanner() {
   if (scanner) return;
@@ -89,39 +109,99 @@ function startScanner() {
   scanner = new Html5Qrcode("reader");
 
   scanner.start(
-    { facingMode: "environment" },
-    {
-      fps: 10,
-      qrbox: { width: 250, height: 120 }
-    },
-    async (decodedText) => {
-      document.getElementById("barcode").value =
-        decodedText;
-
+    {facingMode:"environment"},
+    {fps:10,qrbox:{width:250,height:120}},
+    async (text) => {
+      document.getElementById("barcode").value = text;
       await scanner.stop();
       scanner = null;
-
       searchOrder();
     },
     () => {}
-  ).catch(error => {
+  ).catch(err => {
     scanner = null;
-    alert("Camera error: " + error);
+    setStatus("Camera error: " + err);
   });
 }
 
-function searchOrder() {
-  const code = document.getElementById("barcode").value.trim();
+function setStatus(message) {
+  document.getElementById("status").textContent = message;
+}
 
-  if (!code) {
-    alert("Please scan a barcode first.");
+function searchOrder() {
+  const barcode = document.getElementById("barcode").value.trim();
+
+  if (!barcode) {
+    setStatus("Please enter or scan a barcode.");
     return;
   }
 
-  document.getElementById("result").innerHTML =
-    "<b>Barcode Scanned:</b><br>" +
-    code +
-    "<br><br>Camera scan successful.";
+  document.getElementById("results").replaceChildren();
+  setStatus("Searching Google Sheets...");
+
+  if (requestTimer) clearTimeout(requestTimer);
+
+  const old = document.getElementById("api-script");
+  if (old) old.remove();
+
+  window.orderSearchCallback = function(data) {
+    clearTimeout(requestTimer);
+
+    if (!data.success) {
+      setStatus(data.message || "Order not found.");
+      return;
+    }
+
+    setStatus("Order found - Row " + data.row);
+    showResults(data);
+  };
+
+  const script = document.createElement("script");
+  script.id = "api-script";
+
+  script.onerror = function() {
+    clearTimeout(requestTimer);
+    setStatus("Connection failed. Check Google login and Web App access.");
+  };
+
+  script.src = API_URL +
+    "?barcode=" + encodeURIComponent(barcode) +
+    "&callback=orderSearchCallback&_=" + Date.now();
+
+  document.body.appendChild(script);
+
+  requestTimer = setTimeout(() => {
+    setStatus("Request timed out. Check Web App permission.");
+    script.remove();
+  }, 20000);
+}
+
+function showResults(data) {
+  const container = document.getElementById("results");
+  container.replaceChildren();
+
+  const card = document.createElement("div");
+  card.className = "result-card";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "📦 ORDER DETAILS";
+  card.appendChild(heading);
+
+  data.data.forEach(item => {
+    const row = document.createElement("div");
+    row.className = "result-row";
+
+    const label = document.createElement("strong");
+    label.textContent = item.label;
+
+    const value = document.createElement("span");
+    value.textContent = item.value;
+
+    row.append(label, value);
+    card.appendChild(row);
+  });
+
+  container.appendChild(card);
 }
 </script>
 </body>
