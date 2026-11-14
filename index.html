@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order Barcode Scanner</title>
+<script src="https://unpkg.com/html5-qrcode"></script>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f1f5f9;
+  margin: 0;
+  padding: 20px;
+}
+.container {
+  max-width: 520px;
+  margin: auto;
+  background: white;
+  padding: 22px;
+  border-radius: 18px;
+  box-shadow: 0 3px 15px #0001;
+}
+h2 { text-align: center; color: #17365d; }
+button {
+  width: 100%;
+  padding: 15px;
+  margin-top: 12px;
+  border: none;
+  border-radius: 10px;
+  background: #1769aa;
+  color: white;
+  font-size: 16px;
+}
+input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid #ccc;
+  border-radius: 9px;
+  font-size: 17px;
+  margin-top: 10px;
+}
+#reader { margin-top: 18px; }
+.result {
+  background: #eaf3ff;
+  padding: 15px;
+  margin-top: 15px;
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h2>📦 Order Barcode Scanner</h2>
+<p style="text-align:center">
+Online Shopping Purchasing Tracker
+</p>
+
+<button onclick="startScanner()">
+📷 OPEN CAMERA SCANNER
+</button>
+
+<div id="reader"></div>
+
+<h3>Scanned Barcode</h3>
+
+<input id="barcode"
+placeholder="Scan or enter Order ID">
+
+<button onclick="searchOrder()">
+🔍 SEARCH ORDER
+</button>
+
+<div id="result" class="result">
+Waiting for barcode...
+</div>
+
+</div>
+
+<script>
+let scanner = null;
+
+function startScanner() {
+  if (scanner) return;
+
+  scanner = new Html5Qrcode("reader");
+
+  scanner.start(
+    { facingMode: "environment" },
+    {
+      fps: 10,
+      qrbox: { width: 250, height: 120 }
+    },
+    async (decodedText) => {
+      document.getElementById("barcode").value =
+        decodedText;
+
+      await scanner.stop();
+      scanner = null;
+
+      searchOrder();
+    },
+    () => {}
+  ).catch(error => {
+    scanner = null;
+    alert("Camera error: " + error);
+  });
+}
+
+function searchOrder() {
+  const code = document.getElementById("barcode").value.trim();
+
+  if (!code) {
+    alert("Please scan a barcode first.");
+    return;
+  }
+
+  document.getElementById("result").innerHTML =
+    "<b>Barcode Scanned:</b><br>" +
+    code +
+    "<br><br>Camera scan successful.";
+}
+</script>
+</body>
+</html>
