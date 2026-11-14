@@ -154,18 +154,7 @@ function searchOrder() {
 
     setStatus("Order found - Row " + data.row);
     showResults(data);
-    const goButton = document.createElement("button");
-  goButton.textContent = "📊 GO TO ROW " + data.row;
-
-  goButton.style.background = "#188038";
-
-  goButton.onclick = function() {
-    if (data.rowUrl) {
-      window.open(data.rowUrl, "_blank");
-    }
-  };
-
-  container.appendChild(goButton);
+    
   };
 
   const script = document.createElement("script");
@@ -214,6 +203,18 @@ function showResults(data) {
   });
 
   container.appendChild(card);
+  const goButton = document.createElement("button");
+  goButton.textContent = "📊 GO TO ROW " + data.row;
+
+  goButton.style.background = "#188038";
+
+  goButton.onclick = function() {
+    if (data.rowUrl) {
+      window.open(data.rowUrl, "_blank");
+    }
+  };
+
+  container.appendChild(goButton);
 }
 </script>
 </body>
