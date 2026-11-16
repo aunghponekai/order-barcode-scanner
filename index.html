@@ -148,20 +148,34 @@ async function startScanner() {
           const dashboardUrl = "https://script.google.com/macros/s/AKfycbx67rp0AzXNjsZdDbOSDz2kWa091ESFwXH8VsSjc34cDpM5xjkRlkht3jo2E2EA7YWs/exec?barcode="
             + encodeURIComponent(text);
           setStatus("Barcode detected: " + text + ". Sending to Purchasing Tracker...");
-          // Best effort: notify the original tab first.
+          // Send to the original dashboard tab. The dashboard validates GitHub origin and ACKs.
+          let acknowledged = false;
+          const onAck = (event) => {
+            if (event.origin !== "https://script.google.com") return;
+            const data = event.data || {};
+            if (data.type === "PURCHASING_TRACKER_BARCODE_ACK" && data.barcode === text) {
+              acknowledged = true;
+              window.removeEventListener("message", onAck);
+              setStatus("Barcode returned to Purchasing Tracker. Closing scanner tab...");
+              setTimeout(() => window.close(), 500);
+            }
+          };
+          window.addEventListener("message", onAck);
           try {
             if (window.opener && !window.opener.closed) {
               window.opener.postMessage(
-                { type: "PURCHASING_TRACKER_BARCODE", barcode: text },
-                "https://script.google.com"
+                {type:"PURCHASING_TRACKER_BARCODE", barcode:text},
+                "*"
               );
             }
           } catch (e) {}
-          // Reliable fallback: navigate this scanner tab to the dashboard URL.
-          // This avoids depending on iOS Safari's cross-origin opener behavior.
+          // If the dashboard does not ACK, navigate this tab to the dashboard with barcode.
           setTimeout(() => {
-            window.location.replace(dashboardUrl);
-          }, 350);
+            if (!acknowledged) {
+              window.removeEventListener("message", onAck);
+              window.location.replace(dashboardUrl);
+            }
+          }, 1800);
         } else {
           setStatus("Barcode detected. You can search or read label text.");
         }
