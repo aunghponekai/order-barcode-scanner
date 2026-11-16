@@ -44,8 +44,6 @@ input {
 .camera-controls {display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
 .camera-controls button {margin:0}
 .camera-controls .wide {grid-column:1/-1}
-#ocrText {min-height:90px;margin-top:8px}
-.small-note {font-size:13px;color:#64748b;line-height:1.45}
 #status {
   padding:13px;
   background:#f1f5f9;
@@ -100,9 +98,6 @@ Online Shopping Purchasing Tracker
     <input id="zoomSlider" type="range" min="1" max="3" step="0.1" value="1" oninput="applyZoom(this.value)">
   </label>
 </div>
-<p class="small-note">အာရုံစိုက်ရန် Camera ပုံပေါ်ကို တစ်ချက်နှိပ်ပါ။ Barcode မဖတ်နိုင်ပါက READ LABEL TEXT ကိုနှိပ်ပြီး Order Number ကို OCR ဖြင့်ဖတ်နိုင်ပါတယ်။</p>
-<label>OCR Text (စာသား)</label>
-<textarea id="ocrText" placeholder="Detected label text will appear here..."></textarea>
 
 <h3>Scanned Barcode</h3>
 <input id="barcode" placeholder="Scan or enter Barcode">
@@ -119,6 +114,7 @@ let requestTimer = null;
 let flashOn = false;
 let currentTrack = null;
 let zoomValue = null;
+let barcodeReturnStarted = false;
 
 
 async function startScanner() {
@@ -240,35 +236,58 @@ async function readTextFromCamera() {
     setStatus("Open the camera and point it at the shipping label first.");
     return;
   }
+  if (barcodeReturnStarted) return;
   const canvas = document.createElement("canvas");
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
-  canvas.getContext("2d").drawImage(video,0,0,canvas.width,canvas.height);
-  setStatus("Reading label text with OCR. Please wait...");
+  const context = canvas.getContext("2d");
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  setStatus("OCR reading label text... Please wait.");
   try {
     const result = await Tesseract.recognize(canvas, "eng", {
       logger: m => {
-        if (m.status === "recognizing text") setStatus("OCR reading... " + Math.round((m.progress || 0)*100) + "%");
+        if (m.status === "recognizing text") {
+          setStatus("OCR reading... " + Math.round((m.progress || 0) * 100) + "%");
+        }
       }
     });
     const text = (result.data && result.data.text || "").trim();
-    document.getElementById("ocrText").value = text;
     const candidates = text.match(/\d{8,25}/g) || [];
-    if (candidates.length) {
-      const preferred = candidates.find(n => /order/i.test(text.slice(Math.max(0,text.indexOf(n)-60),text.indexOf(n)))) || candidates.sort((a,b)=>b.length-a.length)[0];
-      document.getElementById("barcode").value = preferred;
-      returnBarcodeToDashboard(preferred);
-    } else {
-      setStatus("Text was read, but no long number was detected. Please check the OCR Text.");
+    if (!candidates.length) {
+      setStatus("OCR completed, but no order number was detected. Adjust the label and try again.");
+      return;
     }
-  } catch(e) {
-    setStatus("OCR failed: " + e.message);
+    const preferred = candidates.find(n => /order/i.test(text.slice(Math.max(0, text.indexOf(n) - 60), text.indexOf(n))))
+      || candidates.sort((a, b) => b.length - a.length)[0];
+    document.getElementById("barcode").value = preferred;
+    setStatus("Order number detected by OCR: " + preferred + ". Returning to Purchasing Tracker...");
+    await stopScanner();
+    returnBarcodeToDashboard(preferred);
+  } catch (e) {
+    setStatus("OCR failed: " + (e && e.message ? e.message : e));
+  }
+}
+
+async function stopScanner() {
+  if (!scanner) return;
+  try {
+    if (scanner.isScanning) await scanner.stop();
+    await scanner.clear();
+  } catch (e) {
+    // Continue returning the barcode even if camera shutdown fails.
+  } finally {
+    scanner = null;
+    if (currentTrack) {
+      try { currentTrack.stop(); } catch (e) {}
+      currentTrack = null;
+    }
   }
 }
 
 function returnBarcodeToDashboard(value) {
   const barcode = String(value || "").trim();
-  if (!barcode) return;
+  if (!barcode || barcodeReturnStarted) return;
+  barcodeReturnStarted = true;
   document.getElementById("barcode").value = barcode;
   setStatus("Barcode detected: " + barcode + ". Returning to Purchasing Tracker...");
 
