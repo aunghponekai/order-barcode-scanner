@@ -107,10 +107,7 @@ Online Shopping Purchasing Tracker
 <h3>Scanned Barcode</h3>
 <input id="barcode" placeholder="Scan or enter Barcode">
 
-<button onclick="searchOrder()">🔍 SEARCH ORDER</button>
-
-<div id="status">Waiting for barcode...</div>
-<div id="results"></div>
+<div id="status">Waiting for barcode... Scan a barcode to return it automatically to Purchasing Tracker.</div>
 </div>
 
 <script>
@@ -143,42 +140,7 @@ async function startScanner() {
       async (text) => {
         document.getElementById("barcode").value = text;
         await stopScanner();
-        const params = new URLSearchParams(window.location.search);
-        if (params.get("returnToDashboard") === "1") {
-          const dashboardUrl = "https://script.google.com/macros/s/AKfycbx67rp0AzXNjsZdDbOSDz2kWa091ESFwXH8VsSjc34cDpM5xjkRlkht3jo2E2EA7YWs/exec?barcode="
-            + encodeURIComponent(text);
-          setStatus("Barcode detected: " + text + ". Sending to Purchasing Tracker...");
-          // Send to the original dashboard tab. The dashboard validates GitHub origin and ACKs.
-          let acknowledged = false;
-          const onAck = (event) => {
-            if (event.origin !== "https://script.google.com") return;
-            const data = event.data || {};
-            if (data.type === "PURCHASING_TRACKER_BARCODE_ACK" && data.barcode === text) {
-              acknowledged = true;
-              window.removeEventListener("message", onAck);
-              setStatus("Barcode returned to Purchasing Tracker. Closing scanner tab...");
-              setTimeout(() => window.close(), 500);
-            }
-          };
-          window.addEventListener("message", onAck);
-          try {
-            if (window.opener && !window.opener.closed) {
-              window.opener.postMessage(
-                {type:"PURCHASING_TRACKER_BARCODE", barcode:text},
-                "*"
-              );
-            }
-          } catch (e) {}
-          // If the dashboard does not ACK, navigate this tab to the dashboard with barcode.
-          setTimeout(() => {
-            if (!acknowledged) {
-              window.removeEventListener("message", onAck);
-              window.location.replace(dashboardUrl);
-            }
-          }, 1800);
-        } else {
-          setStatus("Barcode detected. You can search or read label text.");
-        }
+        returnBarcodeToDashboard(text);
       },
       () => {}
     );
@@ -295,107 +257,53 @@ async function readTextFromCamera() {
     if (candidates.length) {
       const preferred = candidates.find(n => /order/i.test(text.slice(Math.max(0,text.indexOf(n)-60),text.indexOf(n)))) || candidates.sort((a,b)=>b.length-a.length)[0];
       document.getElementById("barcode").value = preferred;
-      setStatus("OCR found a possible order number: " + preferred + ". Check it, then Search Order.");
+      returnBarcodeToDashboard(preferred);
     } else {
-      setStatus("Text was read, but no long number was detected. Copy the correct number from OCR Text into the barcode field.");
+      setStatus("Text was read, but no long number was detected. Please check the OCR Text.");
     }
   } catch(e) {
     setStatus("OCR failed: " + e.message);
   }
 }
 
+function returnBarcodeToDashboard(value) {
+  const barcode = String(value || "").trim();
+  if (!barcode) return;
+  document.getElementById("barcode").value = barcode;
+  setStatus("Barcode detected: " + barcode + ". Returning to Purchasing Tracker...");
+
+  const dashboardUrl = API_URL + "?barcode=" + encodeURIComponent(barcode);
+  let acknowledged = false;
+  const onAck = (event) => {
+    if (event.origin !== "https://script.google.com") return;
+    const data = event.data || {};
+    if (data.type === "PURCHASING_TRACKER_BARCODE_ACK" && String(data.barcode) === barcode) {
+      acknowledged = true;
+      window.removeEventListener("message", onAck);
+      setStatus("Barcode sent successfully. Closing scanner...");
+      setTimeout(() => window.close(), 250);
+    }
+  };
+  window.addEventListener("message", onAck);
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({type:"PURCHASING_TRACKER_BARCODE", barcode}, "*");
+    }
+  } catch (e) {}
+
+  // Fallback: if the original tab cannot acknowledge, return the barcode by URL.
+  setTimeout(() => {
+    if (!acknowledged) {
+      window.removeEventListener("message", onAck);
+      window.location.replace(dashboardUrl);
+    }
+  }, 1500);
+}
+
 function setStatus(message) {
   document.getElementById("status").textContent = message;
 }
 
-function searchOrder() {
-  const barcode = document.getElementById("barcode").value.trim();
-
-  if (!barcode) {
-    setStatus("Please enter or scan a barcode.");
-    return;
-  }
-
-  document.getElementById("results").replaceChildren();
-  setStatus("Searching Google Sheets...");
-
-  if (requestTimer) clearTimeout(requestTimer);
-
-  const old = document.getElementById("api-script");
-  if (old) old.remove();
-
-  window.orderSearchCallback = function(data) {
-    clearTimeout(requestTimer);
-
-    if (!data.success) {
-      setStatus(data.message || "Order not found.");
-      return;
-    }
-
-    setStatus("Order found - Row " + data.row);
-    showResults(data);
-    
-  };
-
-  const script = document.createElement("script");
-  script.id = "api-script";
-
-  script.onerror = function() {
-    clearTimeout(requestTimer);
-    setStatus("Connection failed. Check Google login and Web App access.");
-  };
-
-  script.src = API_URL +
-    "?barcode=" + encodeURIComponent(barcode) +
-    "&callback=orderSearchCallback&_=" + Date.now();
-
-  document.body.appendChild(script);
-
-  requestTimer = setTimeout(() => {
-    setStatus("Request timed out. Check Web App permission.");
-    script.remove();
-  }, 20000);
-}
-
-function showResults(data) {
-  const container = document.getElementById("results");
-  container.replaceChildren();
-
-  const card = document.createElement("div");
-  card.className = "result-card";
-
-  const heading = document.createElement("h3");
-  heading.textContent = "📦 ORDER DETAILS";
-  card.appendChild(heading);
-
-  data.data.forEach(item => {
-    const row = document.createElement("div");
-    row.className = "result-row";
-
-    const label = document.createElement("strong");
-    label.textContent = item.label;
-
-    const value = document.createElement("span");
-    value.textContent = item.value;
-
-    row.append(label, value);
-    card.appendChild(row);
-  });
-
-  container.appendChild(card);
-  const goButton = document.createElement("button");
-  goButton.textContent = "📊 GO TO ROW " + data.row;
-
-  goButton.style.background = "#188038";
-
-  goButton.onclick = function() {
-    if (data.rowUrl) {
-      window.open(data.rowUrl, "_blank");
-    }
-  };
-
-  container.appendChild(goButton);
-}
 </script>
 </body>
 </html>
