@@ -144,10 +144,22 @@ async function startScanner() {
         document.getElementById("barcode").value = text;
         await stopScanner();
         const params = new URLSearchParams(window.location.search);
-        if (params.get("returnToDashboard") === "1" && window.opener) {
-          window.opener.postMessage({type:"PURCHASING_TRACKER_BARCODE",barcode:text},"*");
-          setStatus("Barcode sent back to Purchasing Tracker. Closing scanner tab...");
-          setTimeout(() => window.close(), 700);
+        if (params.get("returnToDashboard") === "1") {
+          const dashboardUrl = "https://script.google.com/macros/s/AKfycbx67rp0AzXNjsZdDbOSDz2kWa091ESFwXH8VsSjc34cDpM5xjkRlkht3jo2E2EA7YWs/exec?barcode="
+            + encodeURIComponent(text);
+          setStatus("Barcode detected: " + text + ". Returning to Purchasing Tracker...");
+          // Navigating the opener is permitted cross-origin; the dashboard then reads ?barcode=.
+          try {
+            if (window.opener && !window.opener.closed) {
+              window.opener.location.href = dashboardUrl;
+              setTimeout(() => window.close(), 900);
+            } else {
+              // iOS Safari may open a tab without an opener; continue in this tab instead.
+              window.location.href = dashboardUrl;
+            }
+          } catch (e) {
+            window.location.href = dashboardUrl;
+          }
         } else {
           setStatus("Barcode detected. You can search or read label text.");
         }
