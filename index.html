@@ -147,19 +147,21 @@ async function startScanner() {
         if (params.get("returnToDashboard") === "1") {
           const dashboardUrl = "https://script.google.com/macros/s/AKfycbx67rp0AzXNjsZdDbOSDz2kWa091ESFwXH8VsSjc34cDpM5xjkRlkht3jo2E2EA7YWs/exec?barcode="
             + encodeURIComponent(text);
-          setStatus("Barcode detected: " + text + ". Returning to Purchasing Tracker...");
-          // Navigating the opener is permitted cross-origin; the dashboard then reads ?barcode=.
+          setStatus("Barcode detected: " + text + ". Sending to Purchasing Tracker...");
+          // Best effort: notify the original tab first.
           try {
             if (window.opener && !window.opener.closed) {
-              window.opener.location.href = dashboardUrl;
-              setTimeout(() => window.close(), 900);
-            } else {
-              // iOS Safari may open a tab without an opener; continue in this tab instead.
-              window.location.href = dashboardUrl;
+              window.opener.postMessage(
+                { type: "PURCHASING_TRACKER_BARCODE", barcode: text },
+                "https://script.google.com"
+              );
             }
-          } catch (e) {
-            window.location.href = dashboardUrl;
-          }
+          } catch (e) {}
+          // Reliable fallback: navigate this scanner tab to the dashboard URL.
+          // This avoids depending on iOS Safari's cross-origin opener behavior.
+          setTimeout(() => {
+            window.location.replace(dashboardUrl);
+          }, 350);
         } else {
           setStatus("Barcode detected. You can search or read label text.");
         }
